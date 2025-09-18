@@ -232,10 +232,29 @@ export default async function handler(
     return res.status(405).json({ error: 'Method Not Allowed' })
   }
 
-  const { message, timezone, sheetId, userName, remove } = req.body
+  const { message, timezone, sheetId, userName, remove, availability } = req.body
   const userTimeZone = timezone || 'Australia/Melbourne'
   const sheetKey = sheetId || 'default'
   const name = userName || 'Anonymous'
+
+  // Handle creating a sheet with existing availability
+  if (availability && Array.isArray(availability)) {
+    if (!sheetAvailabilities[sheetKey]) sheetAvailabilities[sheetKey] = {};
+    sheetAvailabilities[sheetKey][name] = availability.map((slot: any) => ({
+      start: new Date(slot.start),
+      end: new Date(slot.end),
+    }));
+
+    const allUsers = Object.entries(sheetAvailabilities[sheetKey]);
+    const allUserSlots = allUsers.map(([user, slots]) => ({
+      user,
+      slots: slots.map(slot => ({ start: slot.start.toISOString(), end: slot.end.toISOString() }))
+    }));
+
+    const response = { users: allUserSlots, overlap: [], sheetId: sheetKey };
+    broadcastSheetUpdate(sheetKey, response);
+    return res.status(200).json(response);
+  }
 
   // Handle empty message (fetch only)
   if (!message && !remove) {
